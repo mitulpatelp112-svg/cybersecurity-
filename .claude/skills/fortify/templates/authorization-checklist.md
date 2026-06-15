@@ -7,6 +7,17 @@ the user and stop.
 ## Required before active testing
 - [ ] The user has confirmed they own, or are explicitly authorized to test,
       this project/codebase.
+- [ ] **Authorization basis recorded** — ask which applies and capture it:
+      - [ ] (a) You are the owner / employer of the system.
+      - [ ] (b) Written penetration-test agreement — paste/confirm the scope.
+      - [ ] (c) Bug-bounty program — confirm the target is in the published scope.
+      - [ ] (d) Other — describe and confirm.
+      A bare "yes" is sufficient only for `localhost` / loopback. Anything else
+      requires one of (a)–(d).
+- [ ] **Target matches the project** — the live target hostname/IP corresponds to
+      a domain/service referenced in this codebase, OR the user has explicitly
+      confirmed the (otherwise-unrelated) target is theirs. This catches typos
+      and injected targets.
 - [ ] Live targets are limited to:
       - [ ] `localhost` / loopback (127.0.0.1, ::1), and/or
       - [ ] a specific staging/test URL the user provided AND confirmed they own

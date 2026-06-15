@@ -31,27 +31,45 @@ Content-Security-Policy: default-src 'self'; object-src 'none'; frame-ancestors 
 Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
-Referrer-Policy: no-referrer
+Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: geolocation=(), microphone=(), camera=()
 Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
 Cross-Origin-Resource-Policy: same-origin
 ```
+- **Referrer-Policy**: `strict-origin-when-cross-origin` is the recommended
+  default (preserves analytics/OAuth referer needs); use `no-referrer` only at
+  Hardened+ where you've confirmed nothing depends on the referer.
+- **COOP+COEP**: both are needed for cross-origin isolation; COOP alone is
+  incomplete. Add COEP `require-corp` only if it doesn't break embedded
+  cross-origin resources (test first).
+- **X-Frame-Options vs CSP**: modern browsers honor CSP `frame-ancestors` and
+  ignore `X-Frame-Options` when both are present — keep XFO only for legacy.
+- **Cache-Control** (first-class item): set `Cache-Control: no-store, no-cache`
+  on any response with personal data, session tokens, or sensitive business data
+  to keep it out of shared proxy/CDN caches.
 - Node/Express: `helmet()`. Django: `SecurityMiddleware` + settings. Rails:
-  `secure_headers`. Nginx: `add_header`. Set `Cache-Control: no-store` on
-  sensitive responses.
+  `secure_headers`. Nginx: `add_header`.
 
 ## 4. CORS
 - Replace `*` (especially with credentials) with an explicit origin allowlist.
 - Restrict methods/headers; never reflect arbitrary `Origin`.
 
 ## 5. Authentication & sessions
-- Hash passwords with argon2id (or bcrypt/scrypt). Remove MD5/SHA1/plaintext.
+- Hash passwords with argon2id (≥19 MiB memory, ≥2 iterations, 1 thread), or
+  bcrypt (cost ≥10, 12 recommended), or scrypt (N≥32768, r=8, p=1). Remove
+  MD5/SHA1/plaintext. Follow the OWASP Password Storage Cheat Sheet for minimums.
 - Cookies: `HttpOnly; Secure; SameSite=Lax|Strict`. Rotate session ID on login;
   set idle + absolute timeout.
 - Add rate limiting + exponential backoff/lockout on auth endpoints.
 - Generic auth errors (no user enumeration). Offer/require MFA per tier.
 - JWT: enforce `alg` allowlist (no `none`), strong secret/keys, verify
-  `exp`/`aud`/`iss`; prevent RS256↔HS256 confusion; short TTL + refresh rotation.
+  `exp`/`aud`/`iss`; prevent RS256↔HS256 confusion; allowlist `kid` and ignore
+  `jku`/`x5u`/`jwk` header-supplied keys; short TTL + single-use refresh rotation
+  with reuse detection.
+- Account recovery: high-entropy single-use reset tokens with short expiry bound
+  to the account; ignore the client `Host` header when building reset links;
+  generic responses; rate-limit OTP/reset; re-auth for sensitive changes.
 
 ## 6. Access control
 - Enforce authorization server-side on every request: ownership checks (no
@@ -103,9 +121,26 @@ Cross-Origin-Resource-Policy: same-origin
   exported components. Strip debug, disable backup of sensitive data.
 
 ## 15. Desktop / Electron
-- `contextIsolation:true`, `nodeIntegration:false`, `sandbox:true`. Strict CSP.
-  No loading of remote content into privileged windows. Validate all IPC inputs.
-  Signed & verified auto-update. Least-privilege file/OS access.
+- Electron: `contextIsolation:true`, `nodeIntegration:false`, `sandbox:true`,
+  `webviewTag:false`, `enableRemoteModule:false`, `allowRunningInsecureContent:
+  false`. Strict CSP. No loading of remote content into privileged windows.
+  Restrict navigation (`will-navigate`, `setWindowOpenHandler`). Validate all IPC
+  inputs. Signed & verified auto-update. Least-privilege file/OS access. Follow
+  the official Electron Security Checklist.
+- Native desktop: code-sign & notarize; ship signed updates over TLS; validate
+  IPC/named-pipe input; load libraries from trusted absolute paths (avoid DLL/
+  dylib search-order hijack); request minimal entitlements.
+
+## 16. Framework-specific quick wins
+- **Django**: `python manage.py check --deploy`; `DEBUG=False`; set
+  `SECURE_*`/`SESSION_COOKIE_*`/`CSRF_COOKIE_*`; run `bandit`.
+- **Spring**: enable Spring Security; parameterize JPQL/HQL; lock down Actuator
+  endpoints; disable verbose error pages; keep logging libs patched (Log4Shell).
+- **Go**: `govulncheck ./...`; validate all inputs; use `html/template` (auto-
+  escaping) not `text/template` for HTML.
+- **Rails**: keep `secure_headers`/strong params; `bundler-audit`.
+- **React Native / Flutter**: no secrets in the bundle; sign & verify OTA updates;
+  secure the native bridge; pin certs at the native layer.
 
 ---
 

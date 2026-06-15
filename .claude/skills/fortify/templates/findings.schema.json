@@ -22,7 +22,15 @@
           "items": { "type": "string" },
           "description": "Authorized targets tested (e.g. localhost:3000, staging url)"
         },
-        "authorizationBasis": { "type": "string" },
+        "authorizationBasisType": {
+          "enum": ["self-attested-owner", "employer-authorization", "pentest-agreement", "bug-bounty-in-scope", "localhost-only", "other"],
+          "description": "Structured authorization basis; forces the question to be asked rather than free-texted away."
+        },
+        "authorizationBasis": { "type": "string", "description": "Free-text detail of the authorization (who/what scope)." },
+        "secretsRedacted": {
+          "type": "boolean",
+          "description": "Audit trail: set true once the secret-pattern redaction pass has run over this output."
+        },
         "tools": { "type": "array", "items": { "type": "string" } },
         "swarmAgents": { "type": "array", "items": { "type": "string" } }
       }
@@ -54,6 +62,8 @@
           "attackClass": { "type": "string", "description": "Reference into attack-catalog.md (e.g. A. Injection / D. Access Control)" },
           "location": {
             "type": "object",
+            "minProperties": 1,
+            "description": "At least one of file/endpoint/surface must identify where the finding is.",
             "properties": {
               "file": { "type": "string" },
               "line": { "type": "integer" },
@@ -63,12 +73,13 @@
           },
           "description": { "type": "string" },
           "impact": { "type": "string" },
-          "evidence": { "type": "string", "description": "How found; safe PoC steps. NEVER include secret values or live PII." },
+          "evidence": { "type": "string", "description": "How found; safe PoC steps in prose. NEVER include secret values or live PII — describe a credential's type/source, not its value." },
           "remediation": { "type": "string" },
           "compliance": {
             "type": "array",
             "items": {
               "type": "object",
+              "required": ["framework", "control", "status"],
               "properties": {
                 "framework": { "type": "string" },
                 "control": { "type": "string" },
@@ -84,6 +95,7 @@
       "description": "Inventory of surfaces; see accessibility-map.md",
       "items": {
         "type": "object",
+        "required": ["surface", "exposure"],
         "properties": {
           "surface": { "type": "string" },
           "exposure": { "enum": ["public", "authenticated", "role-restricted", "internal-only", "localhost"] },

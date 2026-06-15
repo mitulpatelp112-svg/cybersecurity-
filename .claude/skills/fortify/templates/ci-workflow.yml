@@ -2,10 +2,17 @@
 # Offered at runtime (Phase 2/7). Adapt steps to the detected stack; this is a
 # safe, static + dependency + secret scan gate. Active exploit testing is NOT
 # run in CI by default (requires an authorized running target).
+#
+# SUPPLY-CHAIN NOTE: for production use, pin every `uses:` reference to a full
+# commit SHA (e.g. `actions/checkout@<40-char-sha>  # v4`) rather than a moving
+# tag. Tags are mutable and can be force-pushed. Tools like `pin-github-action`
+# or Dependabot's actions updater can do this for you. Version tags are used
+# below for readability — replace them with SHAs before relying on this gate.
 
 name: security
 
-on:
+# Quoted to stop YAML 1.1 parsers/linters reading `on` as the boolean `true`.
+"on":
   pull_request:
   push:
     branches: [main, master]
@@ -19,15 +26,20 @@ permissions:
 jobs:
   fortify-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30      # Semgrep/OSV can stall on very large repos
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0    # full history for secret scanning
 
       # --- Secret scanning ---
+      # NOTE: private repos require a GITLEAKS_LICENSE secret.
+      # See https://github.com/gitleaks/gitleaks-action
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # uncomment for private repos
 
       # --- Dependency / vulnerability audit (enable the ones matching your stack) ---
       - name: Node dependency audit
@@ -39,10 +51,38 @@ jobs:
       - name: Python dependency audit
         if: hashFiles('**/requirements*.txt', '**/poetry.lock', '**/Pipfile.lock') != ''
         run: |
-          python -m pip install --upgrade pip pip-audit
+          python -m pip install --upgrade pip
+          python -m pip install "pip-audit==2.7.3"
           pip-audit || exit 1
 
-      # --- OSV multi-ecosystem scanner ---
+      - name: Go dependency audit
+        if: hashFiles('**/go.sum') != ''
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... || exit 1
+
+      - name: Rust dependency audit
+        if: hashFiles('**/Cargo.lock') != ''
+        run: |
+          cargo install cargo-audit
+          cargo audit || exit 1
+
+      - name: Ruby dependency audit
+        if: hashFiles('**/Gemfile.lock') != ''
+        run: |
+          gem install bundler-audit
+          bundle-audit check --update || exit 1
+
+      - name: Java/Gradle dependency audit (Trivy)
+        if: hashFiles('**/pom.xml', '**/build.gradle', '**/build.gradle.kts') != ''
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      # --- OSV multi-ecosystem scanner (covers ecosystems above as a backstop) ---
       - name: OSV scan
         uses: google/osv-scanner-action@v1
         with:
@@ -50,28 +90,28 @@ jobs:
 
       # --- Static analysis (SAST) via Semgrep with security rulesets ---
       - name: Semgrep SAST
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/security-audit
-            p/secrets
-        env:
-          SEMGREP_SARIF_OUTPUT: semgrep.sarif
+        run: |
+          python -m pip install semgrep
+          semgrep scan --error \
+            --config p/owasp-top-ten \
+            --config p/security-audit \
+            --config p/secrets \
+            --sarif --output semgrep.sarif || true
 
       - name: Upload SARIF to code scanning
-        if: always()
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
 
-      # --- IaC scanning (only if infra is present) ---
+      # --- IaC scanning (only if real IaC is present; glob kept narrow) ---
       - name: IaC scan (Checkov)
-        if: hashFiles('**/*.tf', '**/Dockerfile', '**/k8s/**', '**/*.yaml') != ''
-        uses: bridgecrewio/checkov-action@master
+        if: hashFiles('**/*.tf', '**/Dockerfile*', '**/docker-compose*.yml', '**/k8s/**', '**/helm/**') != ''
+        uses: bridgecrewio/checkov-action@v12.2898.0
         with:
           quiet: true
-          soft_fail: true   # set false to enforce once clean
+          # soft_fail: true for Basic/Standard tiers; set to false for Hardened/Maximum
+          soft_fail: true
 
   # Gate: fail the PR on high/critical. Adjust thresholds to your tier.
   gate:

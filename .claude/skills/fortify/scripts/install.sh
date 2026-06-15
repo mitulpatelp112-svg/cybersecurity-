@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fortify installer — copy the Fortify skill into any project so its Claude Code
-# session can invoke `fortify`. Usage:
+# Fortify installer -- copy the Fortify skill into any project so its Claude Code
+# session can invoke `fortify`. Requires bash (>= 3.2); do not run with `sh`.
+# Usage:
 #   ./install.sh /path/to/target/project
 # Run from the directory containing the `fortify` skill folder, or set
 # FORTIFY_SRC to its path.

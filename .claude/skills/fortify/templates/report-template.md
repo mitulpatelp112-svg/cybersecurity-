@@ -69,6 +69,7 @@
 - **Location**: {{LOCATION}}
 - **Description**: {{DESCRIPTION}}
 - **Impact**: {{IMPACT}}
+<!-- EVIDENCE: describe PoC steps only — NEVER paste secret values, live tokens, or PII here -->
 - **Evidence / PoC (safe)**: {{EVIDENCE}}
 - **Remediation**: {{REMEDIATION}}
 - **Compliance**: {{COMPLIANCE_TAGS}}
