@@ -1,0 +1,88 @@
+# Fortify security gate — drop into .github/workflows/security.yml
+# Offered at runtime (Phase 2/7). Adapt steps to the detected stack; this is a
+# safe, static + dependency + secret scan gate. Active exploit testing is NOT
+# run in CI by default (requires an authorized running target).
+
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: "0 6 * * 1"   # weekly re-scan
+
+permissions:
+  contents: read
+  security-events: write   # to upload SARIF to GitHub code scanning
+
+jobs:
+  fortify-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # full history for secret scanning
+
+      # --- Secret scanning ---
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: false
+
+      # --- Dependency / vulnerability audit (enable the ones matching your stack) ---
+      - name: Node dependency audit
+        if: hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml') != ''
+        run: |
+          corepack enable || true
+          npm audit --audit-level=high || exit 1
+
+      - name: Python dependency audit
+        if: hashFiles('**/requirements*.txt', '**/poetry.lock', '**/Pipfile.lock') != ''
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit || exit 1
+
+      # --- OSV multi-ecosystem scanner ---
+      - name: OSV scan
+        uses: google/osv-scanner-action@v1
+        with:
+          scan-args: "--recursive ./"
+
+      # --- Static analysis (SAST) via Semgrep with security rulesets ---
+      - name: Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/security-audit
+            p/secrets
+        env:
+          SEMGREP_SARIF_OUTPUT: semgrep.sarif
+
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      # --- IaC scanning (only if infra is present) ---
+      - name: IaC scan (Checkov)
+        if: hashFiles('**/*.tf', '**/Dockerfile', '**/k8s/**', '**/*.yaml') != ''
+        uses: bridgecrewio/checkov-action@master
+        with:
+          quiet: true
+          soft_fail: true   # set false to enforce once clean
+
+  # Gate: fail the PR on high/critical. Adjust thresholds to your tier.
+  gate:
+    needs: fortify-scan
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report gate result
+        run: |
+          if [ "${{ needs.fortify-scan.result }}" != "success" ]; then
+            echo "Security gate failed — review findings above."
+            exit 1
+          fi
+          echo "Security gate passed."

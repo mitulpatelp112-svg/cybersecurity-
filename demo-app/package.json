@@ -1,0 +1,18 @@
+{
+  "name": "fortify-demo-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Intentionally-vulnerable demo target for the Fortify security skill (localhost only).",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "start:hardened": "node hardened/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "better-sqlite3": "^11.0.0",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.2.0",
+    "argon2": "^0.40.1"
+  }
+}

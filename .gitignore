@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+# Env / secrets — never commit
+.env
+.env.*
+*.pem
+*.key
+# Fortify run outputs
+security/
+*.sarif
+# OS / editor
+.DS_Store
+*.log

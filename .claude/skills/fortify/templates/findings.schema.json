@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fortify.skill/findings.schema.json",
+  "title": "Fortify Security Findings",
+  "type": "object",
+  "required": ["run", "findings"],
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": ["tier", "timestamp", "targets"],
+      "properties": {
+        "tier": { "enum": ["basic", "standard", "hardened", "maximum"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "fixPolicy": { "enum": ["report-first", "auto-harden", "report-only"] },
+        "frameworks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "e.g. OWASP-ASVS, OWASP-Top10, NIST-CSF, NIST-800-53, CIS, SOC2, ISO27001, PCI-DSS"
+        },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Authorized targets tested (e.g. localhost:3000, staging url)"
+        },
+        "authorizationBasis": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "swarmAgents": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "critical": { "type": "integer" },
+        "high": { "type": "integer" },
+        "medium": { "type": "integer" },
+        "low": { "type": "integer" },
+        "info": { "type": "integer" },
+        "postureStatement": { "type": "string" },
+        "residualRisk": { "type": "string" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "severity", "status", "location", "description", "remediation"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^F-[0-9]{3,}$" },
+          "title": { "type": "string" },
+          "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "confidence": { "enum": ["confirmed", "potential"] },
+          "cvss": { "type": "string", "description": "Optional CVSS vector/score" },
+          "status": { "enum": ["open", "fixed-in-run", "accepted-risk", "wont-fix"] },
+          "attackClass": { "type": "string", "description": "Reference into attack-catalog.md (e.g. A. Injection / D. Access Control)" },
+          "location": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "endpoint": { "type": "string" },
+              "surface": { "type": "string" }
+            }
+          },
+          "description": { "type": "string" },
+          "impact": { "type": "string" },
+          "evidence": { "type": "string", "description": "How found; safe PoC steps. NEVER include secret values or live PII." },
+          "remediation": { "type": "string" },
+          "compliance": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "framework": { "type": "string" },
+                "control": { "type": "string" },
+                "status": { "enum": ["gap", "covered", "partial"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "accessibilityMap": {
+      "type": "array",
+      "description": "Inventory of surfaces; see accessibility-map.md",
+      "items": {
+        "type": "object",
+        "properties": {
+          "surface": { "type": "string" },
+          "exposure": { "enum": ["public", "authenticated", "role-restricted", "internal-only", "localhost"] },
+          "authN": { "type": "string" },
+          "authZ": { "type": "string" },
+          "sensitivity": { "enum": ["public", "internal", "confidential", "secret-pii-regulated"] },
+          "intended": { "type": "boolean" },
+          "rateLimited": { "type": "boolean" },
+          "findingRef": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}
