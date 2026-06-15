@@ -35,7 +35,7 @@ For each target type, enumerate surfaces and classify them.
 | Exposure | public · authenticated · role-restricted · internal-only · localhost |
 | AuthN | none · session · token/JWT · mTLS · API key |
 | AuthZ | none · ownership-checked · role/scope-checked |
-| Sensitivity | public · internal · confidential · secret/PII/regulated |
+| Sensitivity | public · internal · confidential · secret-pii-regulated |
 | Intended? | yes · NO — finding |
 | Rate-limited | yes / no |
 | Notes | over-exposure, missing checks, etc. |

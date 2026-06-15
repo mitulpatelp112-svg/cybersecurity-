@@ -32,10 +32,12 @@ internal). When unsure, justify the rating rather than inflating it.
 - Location: file:line or endpoint/surface.
 - Description: what it is and why it matters here (concrete, not generic).
 - Evidence: how it was found (and, for validated findings, the safe PoC steps
-  the swarm used against the authorized target).
+  the swarm used against the authorized target), described in prose. If a
+  token/credential was used to validate, describe its type and source — never
+  the value.
 - Impact: what an attacker gains.
 - Remediation: specific, actionable, ideally with a code/config snippet.
-- Status: open / fixed-in-this-run / accepted-risk / wont-fix.
+- Status: open / fixed-in-run / accepted-risk / wont-fix (matches the schema enum).
 - Compliance tags: framework + control IDs (`compliance-mapping.md`).
 - Attack-catalog reference (which class).
 
@@ -52,6 +54,13 @@ internal). When unsure, justify the rating rather than inflating it.
   in/out of scope, authorization basis & targets tested.
 - "What changed" — every hardening edit applied this run.
 - Re-test instructions (how to re-run Fortify / the CI gate).
+
+## Redaction pass (run before writing any output)
+Before writing `report.md`, `findings.json`, or `findings.sarif` to disk, run a
+secret-pattern scrubber over the content: replace anything matching common secret
+shapes (API keys, `sk_*`/`AKIA*`/bearer tokens, private keys, connection strings
+with passwords, JWTs) with `[REDACTED — see location/type]`. Set
+`run.secretsRedacted: true` in `findings.json` as the audit trail that this ran.
 
 ## Rules
 - Never include secret values, full tokens, or live PII in any report. Redact;

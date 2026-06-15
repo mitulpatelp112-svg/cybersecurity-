@@ -81,8 +81,11 @@ checks, and mobile/desktop client surface (authorized targets only).
 ## How tier choice maps to behavior
 - **Audit scope** widens with tier (which catalog sections in `attack-catalog.md`).
 - **ASVS level**: Basic≈L1-, Standard≈L1, Hardened≈L2, Maximum≈L3.
-- **Swarm composition** grows (see `agents/red-team-swarm.md`).
-- **Fix aggressiveness** stays governed by the separate fix-policy choice.
+- **Swarm composition** grows (see `agents/red-team-swarm.md`). Active exploit
+  validation begins at Hardened; Standard and below use safe probes only.
+- **Fix aggressiveness** stays governed by the separate fix-policy choice. In a
+  CI context, auto-harden should open a pull request for review rather than push
+  fixes directly.
 
 Always tell the user, after the run: which tier was applied, what it protects
 against, and what residual risk remains at that tier.

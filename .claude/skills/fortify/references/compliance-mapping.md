@@ -14,15 +14,18 @@ For each finding, attach the relevant control IDs (see `findings.schema.json`
   Failures · A03 Injection · A04 Insecure Design · A05 Security Misconfiguration
   · A06 Vulnerable/Outdated Components · A07 Auth Failures · A08 Software/Data
   Integrity Failures · A09 Logging/Monitoring Failures · A10 SSRF.
-- **OWASP API Security Top 10**: API1 BOLA · API2 Broken Auth · API3 Property-
-  level authz · API4 Resource consumption · API5 BFLA · API6 Sensitive business
-  flows · API7 SSRF · API8 Misconfiguration · API9 Inventory · API10 Unsafe
-  consumption of APIs.
+- **OWASP API Security Top 10 (2023)**: API1 BOLA · API2 Broken Auth · API3
+  Broken Object Property Level Authorization (merges the 2019 "Excessive Data
+  Exposure" + "Mass Assignment") · API4 Unrestricted Resource Consumption · API5
+  BFLA · API6 Unrestricted Access to Sensitive Business Flows · API7 SSRF · API8
+  Security Misconfiguration · API9 Improper Inventory Management · API10 Unsafe
+  Consumption of APIs. Use 2023 numbering in reports; the 2019 list exists only
+  for legacy reference.
 - **OWASP ASVS** (verification levels): L1 (opportunistic, baseline) → L2
   (standard, most apps with sensitive data) → L3 (advanced, high-value). Map the
   chosen tier: Basic→L1-, Standard→L1, Hardened→L2, Maximum→L3.
-- **OWASP MASVS** (mobile): MASVS-STORAGE, -CRYPTO, -AUTH, -NETWORK, -PLATFORM,
-  -CODE, -RESILIENCE. Use for the mobile target type.
+- **OWASP MASVS 2.0** (mobile): MASVS-STORAGE, -CRYPTO, -AUTH, -NETWORK,
+  -PLATFORM, -CODE, -RESILIENCE. Use for the mobile target type.
 
 ## NIST
 - **CSF 2.0 functions**: Govern · Identify · Protect · Detect · Respond ·

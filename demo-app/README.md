@@ -31,5 +31,9 @@ npm run start:hardened   # runs the hardened version
 | 8 | Verbose errors | stack traces leaked | generic errors |
 | 9 | No rate limiting | unlimited login attempts | rate limiter |
 
+Two secondary impacts also live in the vulnerable build (and are fixed in the
+hardened one): `/admin/users` over-exposes password hashes in its response, and
+the verbose error handler leaks server file paths in stack traces.
+
 Use this app to try the workflow: run `fortify`, let it audit `src/`, review the
 report, apply hardening, then run the red-team swarm against `localhost:3000`.

