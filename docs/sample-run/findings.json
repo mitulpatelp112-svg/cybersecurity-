@@ -1,0 +1,158 @@
+{
+  "run": {
+    "tier": "standard",
+    "timestamp": "2026-06-16T00:00:00Z",
+    "fixPolicy": "report-first",
+    "frameworks": ["OWASP-Top10-2021", "OWASP-ASVS", "OWASP-API-Top10-2023"],
+    "targets": ["localhost:3000 (demo-app/src/server.js)"],
+    "authorizationBasisType": "self-attested-owner",
+    "authorizationBasis": "Repo owner confirmed in session; demo app is localhost-only.",
+    "secretsRedacted": true,
+    "tools": ["manual code review", "live HTTP exploitation (localhost, this session)"],
+    "swarmAgents": ["recon", "config-headers", "access-control-prober", "auth-session-prober", "injection-tester (validated live)"]
+  },
+  "summary": {
+    "critical": 2, "high": 5, "medium": 3, "low": 0, "info": 0,
+    "postureStatement": "NOT ship-ready. The vulnerable build exposes auth bypass, unauthenticated admin access with credential leakage, and multiple injection points. The hardened build (demo-app/hardened/server.js) remediates all findings; live red-team confirmed every issue is blocked there.",
+    "residualRisk": "At Standard tier this covers the OWASP Top 10 for this app surface. Not covered: supply-chain hardening, infra/IaC, and advanced/APT scenarios — choose Hardened/Maximum for those."
+  },
+  "findings": [
+    {
+      "id": "F-001", "title": "SQL injection in POST /login", "severity": "critical",
+      "confidence": "confirmed", "status": "open", "attackClass": "A. Injection (A1 SQLi)",
+      "location": { "file": "demo-app/src/server.js", "line": 30, "endpoint": "POST /login" },
+      "description": "The username is concatenated directly into the SQL string, so an attacker can alter the query logic and bypass authentication.",
+      "impact": "Full authentication bypass and arbitrary data read/modification.",
+      "evidence": "Live: POST /login with username \"' OR '1'='1' --\" returned 200 {\"ok\":true,\"user\":\"alice\"} without a valid password.",
+      "remediation": "Use a parameterized query (WHERE username = ?) and verify the password hash separately (see hardened/server.js).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A03 Injection", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V5.3.4", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-002", "title": "Unauthenticated admin endpoint exposes users and password hashes", "severity": "critical",
+      "confidence": "confirmed", "status": "open", "attackClass": "D. Broken Access Control (BFLA)",
+      "location": { "file": "demo-app/src/server.js", "line": 51, "endpoint": "GET /admin/users" },
+      "description": "The admin route has no authentication or role check, and its response includes the pwd_hash column, leaking credential material.",
+      "impact": "Any anonymous user can enumerate all accounts and obtain password hashes for offline cracking.",
+      "evidence": "Live: GET /admin/users with no credentials returned 200 with all users including pwd_hash values.",
+      "remediation": "Require authentication + admin role; never select/return pwd_hash. See hardened/server.js (authRequired + adminRequired, hash omitted).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A01 Broken Access Control", "status": "gap" },
+        { "framework": "OWASP-API-Top10-2023", "control": "API5 BFLA", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V4.1.1", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-003", "title": "IDOR: any note readable without authorization", "severity": "high",
+      "confidence": "confirmed", "status": "open", "attackClass": "D. Broken Access Control (IDOR/BOLA)",
+      "location": { "file": "demo-app/src/server.js", "line": 44, "endpoint": "GET /notes/:id" },
+      "description": "Notes are returned by id with no authentication or ownership check, so any user can read any other user's notes.",
+      "impact": "Cross-account data disclosure of private notes.",
+      "evidence": "Live: GET /notes/1 and /notes/2 returned full note objects with zero authentication.",
+      "remediation": "Require auth and verify the note's owner matches the caller (see hardened/server.js ownership check).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A01 Broken Access Control", "status": "gap" },
+        { "framework": "OWASP-API-Top10-2023", "control": "API1 BOLA", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-004", "title": "Second-order SQL injection in GET /notes/:id", "severity": "high",
+      "confidence": "confirmed", "status": "open", "attackClass": "A. Injection (A1 SQLi)",
+      "location": { "file": "demo-app/src/server.js", "line": 45, "endpoint": "GET /notes/:id" },
+      "description": "The :id path parameter is concatenated into the SQL query, giving a second injection point distinct from the access-control flaw.",
+      "impact": "Query manipulation / data exfiltration via the notes lookup.",
+      "evidence": "Code review: `WHERE id = ${req.params.id}` builds SQL from untrusted input with no parameterization.",
+      "remediation": "Parameterize and coerce id to an integer (see hardened/server.js: Number(id) + WHERE id = ?).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A03 Injection", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V5.3.4", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-005", "title": "Hardcoded secret committed to source", "severity": "high",
+      "confidence": "confirmed", "status": "open", "attackClass": "K. Secrets Management",
+      "location": { "file": "demo-app/src/server.js", "line": 12 },
+      "description": "A live-style API key (type: sk_live_* secret key) is hardcoded in source. Value redacted per policy.",
+      "impact": "Anyone with repo access obtains the credential; treat as compromised.",
+      "evidence": "Code review: a string literal of secret type at line 12. Value not reproduced here.",
+      "remediation": "Load from environment/secret manager (see hardened/server.js: process.env.API_KEY) and ROTATE the exposed key.",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A05 Security Misconfiguration", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V6.4.1", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-006", "title": "Weak password hashing (unsalted SHA1)", "severity": "high",
+      "confidence": "confirmed", "status": "open", "attackClass": "F2. Cryptographic failures",
+      "location": { "file": "demo-app/src/server.js", "line": 21 },
+      "description": "Passwords are hashed with unsalted SHA1, which is fast and trivially reversible via rainbow tables / GPU cracking.",
+      "impact": "Disclosed hashes (see F-002) are effectively plaintext.",
+      "evidence": "Code review: crypto.createHash('sha1') with no salt.",
+      "remediation": "Use argon2id (≥19 MiB, 2 iterations, 1 thread) or bcrypt (cost ≥10). See hardened/server.js (argon2id).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A02 Cryptographic Failures", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V2.4.1", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-007", "title": "Reflected XSS in GET /search", "severity": "high",
+      "confidence": "confirmed", "status": "open", "attackClass": "B. Cross-Site Scripting",
+      "location": { "file": "demo-app/src/server.js", "line": 40, "endpoint": "GET /search" },
+      "description": "The q query parameter is reflected into the HTML response without encoding.",
+      "impact": "Script execution in a victim's browser (session theft, actions on their behalf).",
+      "evidence": "Live: GET /search?q=<script>alert(1)</script> reflected the payload unescaped in the response body.",
+      "remediation": "Contextually HTML-encode output (see hardened/server.js escapeHtml) and add a strict CSP.",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A03 Injection (XSS)", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V5.3.3", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-008", "title": "Missing security headers", "severity": "medium",
+      "confidence": "confirmed", "status": "open", "attackClass": "E. Security Misconfiguration",
+      "location": { "file": "demo-app/src/server.js", "surface": "all HTTP responses" },
+      "description": "No CSP, HSTS, X-Content-Type-Options, frame-ancestors, or related headers are set.",
+      "impact": "Removes defense-in-depth against XSS, clickjacking, MIME sniffing, and protocol downgrade.",
+      "evidence": "Live: responses returned only X-Powered-By: Express; no security headers present.",
+      "remediation": "Add helmet() with a strict CSP and the full header set (see hardening-playbooks §3).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A05 Security Misconfiguration", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V14.4", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-009", "title": "Verbose error handler leaks stack traces and file paths", "severity": "medium",
+      "confidence": "confirmed", "status": "open", "attackClass": "E. Security Misconfiguration",
+      "location": { "file": "demo-app/src/server.js", "line": 57, "endpoint": "GET /notes/:id (error path)" },
+      "description": "The error handler returns the full stack trace, including server file paths, to the client.",
+      "impact": "Information disclosure aiding further attacks (path disclosure, dependency/version hints).",
+      "evidence": "Live: a malformed /notes id triggered a 500 with a full <pre> stack trace including absolute file paths.",
+      "remediation": "Return a generic error; log details server-side only (see hardened/server.js generic 500 handler).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A05 Security Misconfiguration", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V7.4.1", "status": "gap" }
+      ]
+    },
+    {
+      "id": "F-010", "title": "No rate limiting on authentication", "severity": "medium",
+      "confidence": "confirmed", "status": "open", "attackClass": "C. Broken Authentication",
+      "location": { "file": "demo-app/src/server.js", "line": 28, "endpoint": "POST /login" },
+      "description": "The login endpoint applies no throttling or lockout.",
+      "impact": "Enables brute-force and credential-stuffing attacks.",
+      "evidence": "Live: repeated failed logins were all processed with no throttling.",
+      "remediation": "Add rate limiting + backoff/lockout (see hardened/server.js express-rate-limit, 5/min).",
+      "compliance": [
+        { "framework": "OWASP-Top10-2021", "control": "A07 Auth Failures", "status": "gap" },
+        { "framework": "OWASP-ASVS", "control": "V2.2.1", "status": "gap" }
+      ]
+    }
+  ],
+  "accessibilityMap": [
+    { "surface": "POST /login", "exposure": "public", "authN": "none", "authZ": "none", "sensitivity": "confidential", "intended": true, "rateLimited": false, "findingRef": "F-001", "notes": "SQLi auth bypass + no rate limit" },
+    { "surface": "GET /search", "exposure": "public", "authN": "none", "authZ": "none", "sensitivity": "public", "intended": true, "rateLimited": false, "findingRef": "F-007", "notes": "reflects input unescaped (XSS)" },
+    { "surface": "GET /notes/:id", "exposure": "public", "authN": "none", "authZ": "none", "sensitivity": "confidential", "intended": false, "rateLimited": false, "findingRef": "F-003", "notes": "should be authenticated + owner-only" },
+    { "surface": "GET /admin/users", "exposure": "public", "authN": "none", "authZ": "none", "sensitivity": "secret-pii-regulated", "intended": false, "rateLimited": false, "findingRef": "F-002", "notes": "should be admin-only; leaks password hashes" }
+  ]
+}
