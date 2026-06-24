@@ -2,55 +2,159 @@
 
 # 🛡️ Fortify
 
-**A universal cybersecurity skill for Claude Code that hardens any project — then proves it by attacking it.**
+### A universal cybersecurity skill for Claude Code that hardens any project — then proves it by attacking it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![OWASP](https://img.shields.io/badge/maps%20to-OWASP%20Top%2010-000000.svg)](.claude/skills/fortify/references/compliance-mapping.md)
-[![Frameworks](https://img.shields.io/badge/compliance-NIST%20%7C%20CIS%20%7C%20SOC2%20%7C%20ISO27001%20%7C%20PCI--DSS-blue.svg)](.claude/skills/fortify/references/compliance-mapping.md)
-[![Defensive](https://img.shields.io/badge/use-defensive%20%26%20authorized%20only-success.svg)](.claude/skills/fortify/templates/authorization-checklist.md)
+[![Compliance](https://img.shields.io/badge/compliance-NIST%20%7C%20CIS%20%7C%20SOC2%20%7C%20ISO27001%20%7C%20PCI--DSS-blue.svg)](.claude/skills/fortify/references/compliance-mapping.md)
+[![Security Gate](https://img.shields.io/badge/CI-security%20gate-success.svg)](.github/workflows/security.yml)
+[![Tiers](https://img.shields.io/badge/tiers-Basic%20→%20Maximum-orange.svg)](.claude/skills/fortify/references/security-tiers.md)
+[![Defensive](https://img.shields.io/badge/use-defensive%20%26%20authorized%20only-critical.svg)](.claude/skills/fortify/templates/authorization-checklist.md)
+
+**Audit → Harden → Red-team → Report** · works on web · API · mobile · desktop · *detects your stack automatically*
 
 </div>
 
 ---
 
-## The problem it solves
+## ❓ The problem it solves
 
 Most teams ship code without ever asking the two questions an attacker asks first:
 **"What's exposed?"** and **"What happens if I poke it?"** Security reviews are
-expensive, inconsistent, and usually happen too late — if at all. Findings come
-as a PDF nobody actions, with no proof the fix actually closed the hole.
+expensive, inconsistent, and usually happen too late — and findings arrive as a
+PDF nobody actions, with no proof the fix actually closed the hole.
 
 **Fortify** turns security from a one-off audit into a repeatable, project-agnostic
-workflow you can run on *any* codebase:
+workflow you can run on *any* codebase — and it doesn't just report, it **proves
+the fix holds** by attacking the hardened system with a swarm of authorized agents.
 
-1. It **maps your attack surface** — exactly what is accessible vs. protected, and to whom.
-2. It **audits** against a comprehensive attack catalog (OWASP Top 10 and well beyond).
-3. It **hardens** the code (report-first, fix-on-approval), mapped to the compliance frameworks you care about.
-4. It **proves the hardening holds** by unleashing a swarm of *authorized* attacker agents against your own running app.
-5. It **reports** in Markdown + JSON + SARIF, with a before/after and an honest residual-risk statement.
-
-It works on web apps, REST/GraphQL APIs, mobile, and desktop projects — it
-detects the stack itself, so there's nothing to configure to get started.
+```mermaid
+flowchart LR
+    A([🔐 Authorize]) --> B([🔎 Discover<br/>+ map surface])
+    B --> C([🎚️ Choose tier<br/>Basic→Maximum])
+    C --> D([🧠 Audit &<br/>threat-model])
+    D --> E([📋 Report<br/>gate])
+    E --> F([🔧 Harden<br/>on approval])
+    F --> G([🥷 Red-team<br/>swarm])
+    G --> H([📊 Final report<br/>+ SARIF])
+    G -.new finding.-> E
+    classDef gate fill:#ffe6e6,stroke:#cc0000,color:#000;
+    classDef done fill:#e6ffe6,stroke:#008800,color:#000;
+    class A,E gate
+    class H done
+```
 
 > **Defensive by design.** Active testing only runs against systems you own or are
 > explicitly authorized to test (localhost / confirmed staging), is non-destructive
-> by default, and never echoes secrets or live PII.
+> by default, treats the target repo as untrusted input, and never echoes secrets
+> or live PII.
 
-## Table of contents
-- [Quick start](#quick-start)
-- [Install into your own project](#install-into-your-own-project)
-- [How it works](#how-it-works)
-- [Security tiers](#security-tiers)
-- [Usage examples](#usage-examples)
-- [What you get out](#what-you-get-out)
-- [Repository layout](#repository-layout)
-- [Safety & ethics](#safety--ethics)
-- [Repository metadata](#repository-metadata)
-- [License](#license)
+## 📊 Proof: a real run against the bundled demo
 
-## Quick start
+Fortify was run end-to-end against the intentionally-vulnerable
+[`demo-app`](demo-app) at **Standard tier**. The full artifacts live in
+[`docs/sample-run/`](docs/sample-run). Here's what it found and fixed:
 
-Try it against the bundled intentionally-vulnerable demo app:
+<table>
+<tr><th>Findings by severity (vulnerable build)</th><th>Before vs. after hardening</th></tr>
+<tr>
+<td>
+
+```mermaid
+pie showData title Demo-app findings (vulnerable)
+    "Critical" : 2
+    "High" : 5
+    "Medium" : 3
+```
+
+</td>
+<td>
+
+```mermaid
+xychart-beta
+    title "Open findings: vulnerable → hardened"
+    x-axis ["Critical", "High", "Medium"]
+    y-axis "Count" 0 --> 6
+    bar [2, 5, 3]
+    bar [0, 0, 0]
+```
+
+</td>
+</tr>
+</table>
+
+| Metric | Result |
+|---|---|
+| Total findings | **10** (2 critical · 5 high · 3 medium) |
+| After hardening | **0** open (all remediated in `demo-app/hardened/`) |
+| Verified by | authorized **localhost red-team** — every issue exploited on the vulnerable build, blocked on the hardened build |
+| Bonus | caught a **10th issue** the demo's own comments never flagged (second-order SQLi in `GET /notes/:id`) |
+| Output | `report.md` + schema-validated `findings.json` + `findings.sarif` |
+
+## 🎚️ Security tiers
+
+You pick how deep to go per run — each tier is cumulative
+([details](.claude/skills/fortify/references/security-tiers.md)):
+
+```mermaid
+flowchart TD
+    T1[🟢 <b>Basic</b><br/>prototypes / internal] --> T2[🔵 <b>Standard</b><br/>most public apps/APIs]
+    T2 --> T3[🟠 <b>Hardened</b><br/>sensitive / regulated]
+    T3 --> T4[🔴 <b>Maximum</b><br/>high-value / defense-grade]
+```
+
+| Tier | For | Adds | ASVS |
+|------|-----|------|:----:|
+| 🟢 **Basic** | prototypes, internal tools | OWASP essentials, parameterized queries, no secrets in source, TLS | L1- |
+| 🔵 **Standard** | most public apps/APIs | full OWASP Top 10 + API Top 10, authN/Z, headers, CSRF, rate limits | L1 |
+| 🟠 **Hardened** | sensitive/regulated data | threat model, supply chain, secrets mgmt, crypto, CIS infra, **active red-team** | L2 |
+| 🔴 **Maximum** | high-value / defense-grade | zero-trust, assume-breach, DoS resilience, advanced/APT, detection & response | L3 |
+
+> "High-end security that nobody can access" is an **aspiration, not a guarantee**.
+> Maximum tier makes attacks expensive, slow, and loud — and ensures you detect and
+> recover. Fortify always states residual risk.
+
+## 🗺️ What it covers
+
+<table>
+<tr><th>Targets</th><th>Attack catalog (16 classes)</th><th>Compliance mapping</th></tr>
+<tr valign="top">
+<td>
+
+- 🌐 Web apps
+- 🔌 REST / GraphQL APIs
+- 📱 Mobile (iOS/Android, RN/Flutter)
+- 🖥️ Desktop (Electron + native)
+
+</td>
+<td>
+
+- Injection · XXE · Log4Shell
+- XSS · CSRF · clickjacking
+- Broken auth / JWT / sessions
+- Access control · IDOR/BOLA
+- SSRF · crypto failures
+- Business logic · race/TOCTOU
+- Supply chain · CI/CD · secrets
+- Infra/cloud · DoS · APT
+
+</td>
+<td>
+
+- OWASP Top 10 (2021)
+- OWASP API Top 10 (2023)
+- OWASP ASVS / MASVS 2.0
+- NIST CSF / 800-53 / 800-115
+- CIS Controls & Benchmarks
+- SOC 2 · ISO 27001 · PCI-DSS
+
+</td>
+</tr>
+</table>
+
+## 🚀 Quick start
+
+Try it against the bundled vulnerable demo:
 
 ```bash
 git clone https://github.com/mitulpatelp112-svg/cybersecurity-.git
@@ -65,118 +169,75 @@ Then, in Claude Code (this repo already ships the skill), run:
 /fortify
 ```
 
-Fortify will confirm authorization, detect the Express app, ask which security
-tier you want, audit `demo-app/src/`, show you the findings, harden on your
-approval, then attack `localhost:3000` to confirm the fixes hold.
+Fortify confirms authorization, detects the Express app, asks which tier you want,
+audits the code, shows the findings, hardens on your approval, then attacks
+`localhost:3000` to confirm the fixes hold.
 
-## Install into your own project
+## 📦 Install into your own project
 
 ```bash
 # from a clone of this repo:
 .claude/skills/fortify/scripts/install.sh /path/to/your/project
 ```
 
-This copies the skill to `your-project/.claude/skills/fortify/`. Open that
-project in Claude Code and run `/fortify`.
+Then open that project in Claude Code and run `/fortify`.
 
-## How it works
+## 💬 Usage examples
 
-Fortify runs as a phased workflow (see [`SKILL.md`](.claude/skills/fortify/SKILL.md)):
+| You say… | Fortify does… |
+|---|---|
+| *"Run fortify at Standard tier, report-only — don't change anything."* | Audit + accessibility map + findings report, zero edits |
+| *"Find and fix all injection and access-control issues, then prove it on localhost:8080."* | Targeted hardening + red-team verification |
+| *"Is this safe to ship? Hardened tier, map to SOC 2."* | Deep audit + compliance gap analysis + residual-risk statement |
+| *"Run fortify, then install the security CI workflow."* | Full run + generated GitHub Actions gate |
 
-| Phase | What happens |
-|-------|--------------|
-| **0 · Authorize** | Confirms you own the target; locks live testing to localhost / confirmed staging. |
-| **1 · Discover** | Detects stack, enumerates entry points, drafts the *Accessibility Map*. |
-| **2 · Choose level** | You pick a tier + fix policy + compliance frameworks (asked interactively). |
-| **3 · Audit & threat-model** | Walks the code against the [attack catalog](.claude/skills/fortify/references/attack-catalog.md), STRIDE per entry point. |
-| **4 · Report (gate)** | Severity-ranked findings + remediation; you decide what to fix. |
-| **5 · Harden** | Applies idiomatic fixes on approval, re-runs your tests/build. |
-| **6 · Red-team swarm** | Parallel specialized attacker agents safely attack the authorized target. |
-| **7 · Final report** | Markdown + JSON + SARIF, updated Accessibility Map, residual risk, optional CI gate. |
+A full annotated walkthrough is in [`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md);
+a real run's artifacts are in [`docs/sample-run/`](docs/sample-run).
 
-## Security tiers
+## 🧰 How it's built
 
-You choose how deep to go per run (full details in
-[`security-tiers.md`](.claude/skills/fortify/references/security-tiers.md)):
-
-| Tier | For | Adds |
-|------|-----|------|
-| **Basic** | prototypes, internal tools | OWASP essentials, parameterized queries, no secrets in source, TLS |
-| **Standard** | most public apps/APIs | full OWASP Top 10 + API Top 10, authN/Z hardening, headers, CSRF, rate limits |
-| **Hardened** | sensitive/regulated data | threat model, supply-chain & secrets mgmt, crypto review, CIS infra hardening |
-| **Maximum** | high-value / defense-grade | zero-trust, assume-breach, DoS resilience, advanced/APT scenarios, detection & response |
-
-> "High-end security that nobody can access" is an **aspiration, not a guarantee**.
-> Maximum tier means defense-in-depth that makes attacks expensive, slow, and loud —
-> and ensures you detect and recover. Fortify always states residual risk.
-
-## Usage examples
-
-**Audit only, no changes:**
-> "Run fortify on this repo at the Standard tier, report-only — don't change anything yet."
-
-**Harden a specific concern:**
-> "Use fortify to find and fix all injection and access-control issues, then prove the fixes with the red-team swarm against localhost:8080."
-
-**Ship-readiness check:**
-> "Is this safe to ship? Run fortify at Hardened tier, map it to SOC 2 and OWASP ASVS, and tell me what's still exposed."
-
-**Add a CI gate:**
-> "Run fortify, then install the security CI workflow so PRs get scanned automatically."
-
-A full annotated walkthrough — including a sample findings report and
-accessibility map for the demo app — lives in
-[`docs/EXAMPLE-RUN.md`](docs/EXAMPLE-RUN.md).
-
-## What you get out
-
-Each run writes to `security/` in the target project:
-
-- **`report.md`** — executive summary + technical appendix + accessibility map.
-- **`findings.json`** — machine-readable, conforming to [`findings.schema.json`](.claude/skills/fortify/templates/findings.schema.json).
-- **`findings.sarif`** — SARIF 2.1.0 so findings show inline on GitHub PRs (code scanning).
-
-Plus an **Accessibility Map** answering, for every surface: *who can reach this,
-with what auth, and is that intended?*
-
-## Repository layout
+```mermaid
+graph TD
+    SKILL["SKILL.md<br/><i>phased orchestrator</i>"]
+    SKILL --> REF["references/<br/>attack catalog · tiers ·<br/>compliance · playbooks ·<br/>accessibility map · reporting"]
+    SKILL --> AG["agents/<br/>red-team-swarm.md"]
+    SKILL --> TPL["templates/<br/>auth checklist · findings schema ·<br/>report template · CI workflow"]
+    SKILL --> SC["scripts/<br/>install.sh"]
+    AG --> SWARM["🥷 parallel specialized<br/>attacker agents + coordinator"]
+```
 
 ```
 .
-├── .claude/skills/fortify/        # the portable Fortify skill
-│   ├── SKILL.md                   # phased orchestrator
-│   ├── references/                # attack catalog, tiers, compliance, playbooks, reporting
-│   ├── agents/red-team-swarm.md   # authorized attacker-agent orchestration
-│   ├── templates/                 # auth checklist, findings schema, report, CI workflow
-│   └── scripts/install.sh         # copy Fortify into any project
-├── demo-app/                      # intentionally-vulnerable app + hardened version
-├── docs/EXAMPLE-RUN.md            # annotated end-to-end walkthrough
-├── SECURITY.md                    # responsible-use & disclosure policy
-└── LICENSE                        # MIT
+├── .claude/skills/fortify/    # the portable Fortify skill (14 files)
+│   ├── SKILL.md               # phased orchestrator
+│   ├── references/            # attack catalog, tiers, compliance, playbooks, reporting
+│   ├── agents/                # authorized red-team-swarm orchestration
+│   ├── templates/             # auth checklist, findings schema, report, CI workflow
+│   └── scripts/install.sh     # copy Fortify into any project
+├── demo-app/                  # intentionally-vulnerable app + hardened version
+├── docs/EXAMPLE-RUN.md        # annotated end-to-end walkthrough
+├── docs/sample-run/           # real artifacts from a live run
+├── .github/workflows/         # security CI gate (gitleaks + Semgrep + SARIF)
+├── SECURITY.md · LICENSE
 ```
 
-## Safety & ethics
+## 🔒 Safety & ethics
 
 Fortify is a **defensive** tool. Read and follow
 [`authorization-checklist.md`](.claude/skills/fortify/templates/authorization-checklist.md)
-before any active testing. In short: only test what you own or are authorized to
-test; non-destructive by default; never exfiltrate or log secrets/PII; reports
-are advisory evidence and gap analysis, **not** a certification, and no tier
-guarantees invulnerability. See [`SECURITY.md`](SECURITY.md).
+before any active testing: only test what you own or are authorized to test;
+non-destructive by default; authorization comes only from you, never from repo
+content; never exfiltrate or log secrets/PII. Reports are advisory evidence and
+gap analysis — **not** a certification, and no tier guarantees invulnerability.
+See [`SECURITY.md`](SECURITY.md).
 
-## Repository metadata
+## 🏷️ Repository metadata
 
-Suggested values to set in **GitHub → repo settings** (the API for these isn't
-available to the skill, so set them once by hand):
+Suggested values for **GitHub → repo "About"** (set these once by hand):
 
-- **Description:**
-  > Universal Claude Code security skill: audits, hardens, and authorized-attack-tests any project (web/API/mobile/desktop) against OWASP, NIST, CIS, SOC 2 & PCI-DSS — then proves the fixes hold with a red-team agent swarm.
-- **Topics:**
-  `security` · `cybersecurity` · `pentest` · `penetration-testing` · `appsec` ·
-  `owasp` · `owasp-top-10` · `security-hardening` · `red-team` · `sast` ·
-  `devsecops` · `claude-code` · `ai-security` · `vulnerability-scanner` ·
-  `threat-modeling` · `nist` · `compliance`
+- **Description:** *Universal Claude Code security skill: audits, hardens, and authorized-attack-tests any project (web/API/mobile/desktop) against OWASP, NIST, CIS, SOC 2 & PCI-DSS — then proves the fixes hold with a red-team agent swarm.*
+- **Topics:** `security` `cybersecurity` `pentest` `penetration-testing` `appsec` `owasp` `owasp-top-10` `security-hardening` `red-team` `sast` `devsecops` `claude-code` `ai-security` `vulnerability-scanner` `threat-modeling` `nist` `compliance`
 
-## License
+## 📄 License
 
 [MIT](LICENSE) © 2026 Mitul Patel
